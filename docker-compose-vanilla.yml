@@ -1,0 +1,95 @@
+name: elabftw
+networks:
+  elabftw-net:
+services:
+  web:
+    image: elabftw/elabimg:5.4.6
+    restart: always
+    container_name: elabftw
+    depends_on:
+      mysql:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+        - ALL
+    cap_add:
+        - CHOWN
+        - SETGID
+        - SETUID
+        - FOWNER
+        - DAC_OVERRIDE
+    environment:
+        - DB_HOST=mysql
+        - DB_PORT=3306
+        - DB_NAME=elabftw
+        - DB_USER=elabftw
+        - DB_PASSWORD=asecretpassword
+        - PHP_TIMEZONE=Europe/Paris
+        - TZ=Europe/Paris
+        # docker run --rm -t --entrypoint '/bin/sh' elabftw/elabimg:5.4.6 -c "php -d memory_limit=10M -d open_basedir='' bin/init tools:genkey"
+        - SECRET_KEY=xxxx
+        - SITE_URL=https://your.url
+        - SERVER_NAME=your.url
+        - DISABLE_HTTPS=false
+        - ENABLE_LETSENCRYPT=false
+        - USE_INDIGO=true
+        - INDIGO_URL=http://chem-plugin/
+        - USE_FINGERPRINTER=true
+        - FINGERPRINTER_URL=http://chem-plugin:8000/
+        - FINGERPRINTER_USE_PROXY=false
+        - USE_OPENCLONING=true
+        - OPENCLONING_URL=http://opencloning-plugin:8000/
+    ports:
+        - '127.0.0.1:5000:443'
+    volumes:
+        - ./elabftw/web:/elabftw/uploads
+    networks:
+      - elabftw-net
+  mysql:
+    image: mysql:8.4
+    restart: always
+    container_name: mysql
+    healthcheck:
+      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute 'SHOW DATABASES;'"
+      interval: 5s
+      timeout: 5s
+      retries: 42
+    cap_drop:
+        - AUDIT_WRITE
+        - MKNOD
+        - SYS_CHROOT
+        - SETFCAP
+        - NET_RAW
+    cap_add:
+        - SYS_NICE
+    environment:
+        - MYSQL_ROOT_PASSWORD=xxxx
+        - MYSQL_DATABASE=elabftw
+        - MYSQL_USER=elabftw
+        - MYSQL_PASSWORD=xxxx
+        - TZ=Europe/Paris
+    volumes:
+        - ./elabftw/mysql:/var/lib/mysql
+    expose:
+      - '3306'
+    networks:
+      - elabftw-net
+  chem-plugin:
+    image: elabftw/chem-plugin
+    container_name: chem-plugin
+    restart: always
+    networks:
+      - elabftw-net
+  opencloning-plugin:
+    image: manulera/opencloning:prod-baseurl-opencloning
+    container_name: opencloning-plugin
+    restart: always
+    networks:
+      - elabftw-net
+    environment:
+      - ALLOWED_ORIGINS=*
+      - ROOT_PATH=/opencloning
+      - BACKEND_URL=/opencloning/
+      - SHOW_APP_BAR=false
+      - DATABASE=elabftw
