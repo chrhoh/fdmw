@@ -1,0 +1,184 @@
+---
+services:
+  proxy-lb:
+    image: "caddy:2-alpine"
+    container_name: "caddy"
+    deploy:
+      restart_policy:
+        condition: "unless-stopped"
+    logging:
+      driver: "journald"
+    cap_add:
+      - "NET_ADMIN"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - type: "bind"
+        source: "./caddy/conf"
+        target: "/etc/caddy"
+      - type: "bind"
+        source: "./caddy/site"
+        target: "/srv"
+      - type: "volume"
+        source: "caddy_data"
+        target: "/data"
+      - type: "volume"
+        source: "caddy_config"
+        target: "/config"
+    networks:
+      - "elabftw-net"
+
+  web:
+    image: "elabftw/elabimg:5.4.6"
+    restart: "always"
+    depends_on:
+      pxc1:
+        condition: "service_healthy"
+    deploy:
+      mode: "replicated"
+      replicas: 4
+      endpoint_mode: "vip"
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - "ALL"
+    cap_add:
+      - "CHOWN"
+      - "SETGID"
+      - "SETUID"
+      - "FOWNER"
+      - "DAC_OVERRIDE"
+    env_file: "elabftw.env"
+    ports:
+      - "127.0.0.1:5000-5003:443"
+    volumes:
+    # test wsa build with bind mounts, not volumes
+      - "./elabftw/web:/elabftw/uploads"
+      - "./elabftw/exports:/elabftw/exports"
+    networks:
+      - "elabftw-net"
+
+  pxc1:
+    image: "percona/percona-xtradb-cluster:8.4"
+    container_name: "pxc1"
+    command: ["--wsrep-new-cluster"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+    env_file: "pxc1.env"
+    cap_add:
+      - "SYS_NICE"
+    volumes:
+      - type: "volume"
+        source: "pxc1"
+        target: "/var/lib/mysql/"
+      - type: "bind"
+        source: "./pxc/certs"
+        target: "/etc/mysql/certs"
+        read_only: true
+      - type: "bind"
+        source: "./pxc/conf.d"
+        target: "/etc/percona-xtradb-cluster.conf.d"
+        read_only: true
+    expose:
+      - "3306"
+    networks:
+      - "pxcnet"
+      - "elabftw-net"
+  pxc2:
+    image: "percona/percona-xtradb-cluster:8.4"
+    depends_on:
+      pxc1:
+        condition: "service_healthy"
+    container_name: "pxc2"
+    env_file: "pxc2.env"
+    volumes:
+      - type: "volume"
+        source: "pxc2"
+        target: "/var/lib/mysql/"
+      - type: "bind"
+        source: "./pxc/certs2"
+        target: "/etc/mysql/certs"
+        read_only: true
+      - type: "bind"
+        source: "./pxc/conf.d"
+        target: "/etc/percona-xtradb-cluster.conf.d"
+        read_only: true
+    networks:
+      - "pxcnet"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+  pxc3:
+    image: "percona/percona-xtradb-cluster:8.4"
+    depends_on:
+      pxc1:
+        condition: "service_healthy"
+    container_name: "pxc3"
+    env_file: "pxc3.env"
+    volumes:
+      - type: "volume"
+        source: "pxc3"
+        target: "/var/lib/mysql/"
+      - type: "bind"
+        source: "./pxc/certs3"
+        target: "/etc/mysql/certs"
+        read_only: true
+      - type: "bind"
+        source: "./pxc/conf.d"
+        target: "/etc/percona-xtradb-cluster.conf.d"
+        read_only: true
+    networks:
+      - "pxcnet"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+
+  redis:
+    image: "redis:8-alpine"
+    restart: "always"
+    container_name: "redis"
+    networks:
+      - "elabftw-net"
+
+  chem-plugin:
+    image: "elabftw/chem-plugin:latest"
+    container_name: "chem-plugin"
+    restart: "always"
+    networks:
+      - "elabftw-net"
+
+  opencloning-plugin:
+    image: "manulera/opencloning:prod-baseurl-opencloning"
+    container_name: "opencloning-plugin"
+    restart: "always"
+    networks:
+      - "elabftw-net"
+    env_file: "opencloning.env"
+
+volumes:
+  caddy_data:
+    driver: "local"
+  caddy_config:
+    driver: "local"
+  pxc1:
+    name: "pxc1"
+    driver: "local"
+  pxc2:
+    name: "pxc2"
+    driver: "local"
+  pxc3:
+    name: "pxc3"
+    driver: "local"
+
+networks:
+  elabftw-net:
+  pxcnet:

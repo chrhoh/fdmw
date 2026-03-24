@@ -1,0 +1,23 @@
+{
+  log {
+    format json
+    output stdout
+  }
+}
+
+http://elabftw.dus {
+  log
+  redir https://{host}{uri} permanent
+}
+
+https://elabftw.dus {
+  log
+  encode
+  request_body {
+    max_size 100MB
+  }
+  reverse_proxy fdmw-elab-web-1:443 fdmw-elab-web-2:443 fdmw-elab-web-3:443 fdmw-elab-web-4:443 {
+    lb_policy random
+  }
+  tls internal
+}
