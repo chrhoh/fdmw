@@ -54,7 +54,7 @@ services:
     ports:
       - "127.0.0.1:5000-5003:443"
     volumes:
-    # test wsa build with bind mounts, not volumes
+    # test was build with bind mounts, not volumes
       - "./elabftw/web:/elabftw/uploads"
       - "./elabftw/exports:/elabftw/exports"
     networks:
